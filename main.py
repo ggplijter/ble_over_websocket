@@ -36,12 +36,15 @@ async def broadcast_handler(websocket, state):
 async def main(args):
     mac_addr = args.address
     uuid_notify = uuid.UUID(args.uuid_notify)
+    hostname = args.hostname
+    port = args.port
+
 
     manager = BleakManager(
         ble_mac=mac_addr,
         ble_uuid=uuid_notify,
-        ws_host="localhost",
-        ws_port=8765,
+        ws_host=hostname,
+        ws_port=port,
     )
 
     websocket_server = websockets.serve(
