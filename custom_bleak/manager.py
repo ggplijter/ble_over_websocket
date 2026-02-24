@@ -7,7 +7,7 @@ import websockets
 from bleak import BleakClient
 
 from custom_bleak.client import CustomBleakClientWinRT
-
+from interfaces.wtal.callbacks import notify_callback
 logger = logging.getLogger(__name__)
 
 
@@ -20,16 +20,20 @@ class BleState(StrEnum):
 
 
 class BleakManager(object):
+    state = BleState.IDLE
+    t_init = time.time()
+    packet_idx = 1
+    queue = asyncio.Queue()
     def __init__(self, ble_mac, ble_uuid, ws_host="localhost", ws_port=7654):
         self.ble_mac = ble_mac
         self.ble_uuid = ble_uuid
         self.ws_host = ws_host
         self.ws_port = ws_port
 
-        self.state = BleState.IDLE
-        self.t_init = time.time()
-        self.packet_idx = 1
-        self.queue = asyncio.Queue()
+        # self.state = BleState.IDLE
+        # self.t_init = time.time()
+        # self.packet_idx = 1
+        # self.queue = asyncio.Queue()
 
         self.client = BleakClient(
             address_or_ble_device=self.ble_mac,
@@ -56,15 +60,9 @@ class BleakManager(object):
         logger.info("closed poll_queue")
 
     async def ble_wait_for_commands(self):
-        async def callback_handler(_, _data):
-            await self.queue.put(
-                (
-                    time.time() - self.t_init,
-                    self.packet_idx,
-                    _data,
-                )
-            )
-            self.packet_idx += 1
+
+        # async_lambda = lambda: asyncio.ensure_future(asyncio.run(lambda char, data: notify_callback(char, data, self.queue))
+        async_lambda = lambda: asyncio.ensure_future(asyncio.sleep(1).then(lambda _: print("Async lambda executed")))
 
         await asyncio.sleep(0.01)
         uri = f"ws://{self.ws_host}:{self.ws_port}"
@@ -77,7 +75,8 @@ class BleakManager(object):
                 ]:
                     await self.client.start_notify(
                         self.ble_uuid,
-                        callback_handler,
+                        # lambda char, data: notify_callback(char, data, self.queue),
+                        async_lambda,
                         force_notify=True,  # was needed for a specific sensor to force notification-mode
                     )
                     logger.info("Start notifying ble device")
@@ -100,3 +99,13 @@ class BleakManager(object):
                     break
 
         logger.info("closed ble_wait_for_commands")
+
+    async def callback_handler(self, _, _data):
+        await self.queue.put(
+            (
+                time.time() - self.t_init,
+                self.packet_idx,
+                _data,
+            )
+        )
+        self.packet_idx += 1
